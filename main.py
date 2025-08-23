@@ -7,8 +7,8 @@ from fastapi import Path
 
 import random
 
-from .db import engine, init_db
-from .models import Text, Result
+from db import engine, init_db
+from models import Text, Result
 
 app = FastAPI(title="Typing Test API")
 
@@ -148,4 +148,5 @@ def leaderboard(duration: int, limit: int = 10, db: Session = Depends(get_db)):
 def get_all_texts(db: Session = Depends(get_db)):
     texts = db.exec(select(Text)).all()
     return [{"id": t.id, "duration": t.duration, "content": t.content, "active": t.active} for t in texts]
+
 
