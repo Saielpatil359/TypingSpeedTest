@@ -1,4 +1,4 @@
-const API_BASE = "https://typeflow-backend.onrender.com"; // Update if your backend URL differs
+const API_BASE = "https://typing-quest.onrender.com"; // Update if your backend URL differs
 
 const ACHIEVEMENTS = [
   { name: "Beginner", minWPM: 0, maxWPM: 39, class: "beginner" },
@@ -330,3 +330,4 @@ restartBtn.addEventListener("click", async () => {
 })();
 
 hiddenInput.addEventListener("paste", (e) => e.preventDefault());
+
