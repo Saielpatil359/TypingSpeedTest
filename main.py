@@ -32,7 +32,7 @@ def on_startup():
     with Session(engine) as db:
         if not db.exec(select(Text)).first():
             db.add_all([
-                Text(duration=60, content="Short 60s paragraph. Warm up and find rhythm."),
+                Text(duration=60, content="Short 60s paragraph. Warm up and find rhythm. Sanket is student from mulund with good phyisque and cheast."),
                 Text(duration=90, content="Medium 90s paragraph. Balance speed and accuracy."),
                 Text(duration=120, content="Long 120s paragraph. Maintain form and consistency."),
             ])
@@ -148,5 +148,6 @@ def leaderboard(duration: int, limit: int = 10, db: Session = Depends(get_db)):
 def get_all_texts(db: Session = Depends(get_db)):
     texts = db.exec(select(Text)).all()
     return [{"id": t.id, "duration": t.duration, "content": t.content, "active": t.active} for t in texts]
+
 
 
