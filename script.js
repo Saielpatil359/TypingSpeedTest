@@ -78,7 +78,7 @@ function renderLeaderboardRows(items){
       ${items.map((r, idx) => `
         <tr>
           <td style="text-align:center">${idx+1}</td>
-          <td>${r.user_id || "anon"}</td>
+          <td>${r.user_id || "unknown"}</td>
           <td style="font-weight:700">${r.wpm}</td>
           <td>${r.accuracy}%</td>
           <td><span class="ach ${r.achievement}" style="border-radius:13px;padding:2px 8px;border:1px solid var(--border);background:rgba(148,163,184,.10);">${r.achievement}</span></td>
@@ -330,4 +330,5 @@ restartBtn.addEventListener("click", async () => {
 })();
 
 hiddenInput.addEventListener("paste", (e) => e.preventDefault());
+
 
