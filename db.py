@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Load environment variables from .env file
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("postgresql://typingpara_user:WIiK3q7dqCh1mr0uF3pNISugZMLjc@dpg-dpg.../typingpara")
 
 # Create SQLAlchemy engine for PostgreSQL
 engine = create_engine(
@@ -19,3 +19,4 @@ engine = create_engine(
 def init_db():
     from models import Text, Result  # Import models to ensure tables creation
     SQLModel.metadata.create_all(engine)
+
