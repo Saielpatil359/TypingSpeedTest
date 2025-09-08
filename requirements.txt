@@ -3,4 +3,7 @@ uvicorn
 sqlmodel
 sqlalchemy
 aiosqlite
+
 pydantic
+psycopg2-binary
+python-dotenv
