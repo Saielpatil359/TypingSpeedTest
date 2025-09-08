@@ -1,13 +1,21 @@
+# db.py
+
+import os
 from sqlmodel import SQLModel, create_engine
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-DATABASE_URL = "postgresql://typingpara_user:WIiK9P3q7dqCh1mr0uF3pNISugKZMLjc@dpg-d2veq0buibrs738hjarg-a/typingpara"
+load_dotenv()  # Load environment variables from .env file
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Create SQLAlchemy engine for PostgreSQL
+engine = create_engine(
+    DATABASE_URL,
+    echo=True  # Enable logging for debugging; disable in production
+)
 
 
 def init_db():
-    from models import Text, Result  # ensure models are imported for table creation
+    from models import Text, Result  # Import models to ensure tables creation
     SQLModel.metadata.create_all(engine)
-
-
