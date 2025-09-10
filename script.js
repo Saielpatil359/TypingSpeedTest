@@ -1,261 +1,334 @@
-import React, { useState, useEffect, useRef } from "react";
-
-const API_BASE = "https://typing-quest.onrender.com"; 
+const API_BASE = "https://typing-quest.onrender.com"; // Update if your backend URL differs
 
 const ACHIEVEMENTS = [
-  { name: "Beginner", minWPM: 0, maxWPM: 39, className: "beginner" },
-  { name: "Pro", minWPM: 40, maxWPM: 69, className: "pro" },
-  { name: "Advanced", minWPM: 70, maxWPM: Infinity, className: "advanced" }
+  { name: "Beginner", minWPM: 0, maxWPM: 39, class: "beginner" },
+  { name: "Pro", minWPM: 40, maxWPM: 69, class: "pro" },
+  { name: "Advanced", minWPM: 70, maxWPM: Infinity, class: "advanced" }
 ];
-
 const DEFAULT_TIME = 90;
 
-export default function TypingTest() {
-  const [duration, setDuration] = useState(DEFAULT_TIME);
-  const [timeLeft, setTimeLeft] = useState(DEFAULT_TIME);
-  const [started, setStarted] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [chars, setChars] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [keystrokes, setKeystrokes] = useState(0);
-  const [currentTextId, setCurrentTextId] = useState(null);
-  const [wpm, setWpm] = useState(0);
-  const [accuracy, setAccuracy] = useState(100);
-  const [achievement, setAchievement] = useState("-");
-  const [achievementClass, setAchievementClass] = useState("");
-  const [userName, setUserName] = useState(localStorage.getItem("typeflow-user-name") || "");
-  const timerIdRef = useRef(null);
-  const promptRef = useRef(null);
-  const hiddenInputRef = useRef(null);
+// State variables
+let duration = DEFAULT_TIME;
+let timeLeft = duration;
+let started = false;
+let finished = false;
+let timerId = null;
 
-  useEffect(() => {
-    // Save username to localStorage when it changes
-    localStorage.setItem("typeflow-user-name", userName);
-  }, [userName]);
+let chars = [];
+let currentIndex = 0;
+let correctCount = 0;
+let keystrokes = 0;
+let currentTextId = null;
 
-  useEffect(() => {
-    // Fetch initial text based on duration when component mounts or duration changes
-    resetState();
-  }, [duration]);
+// Elements
+const promptEl = document.getElementById("prompt");
+const timeEl = document.getElementById("time");
+const wpmEl = document.getElementById("wpm");
+const accEl = document.getElementById("accuracy");
+const achievementEl = document.getElementById("achievement");
+const achievementBadgeEl = document.getElementById("achievementBadge");
+const textAreaEl = document.getElementById("textArea");
+const hiddenInput = document.getElementById("hiddenInput");
+const timeChips = document.querySelectorAll(".time-chip");
+const themeToggle = document.getElementById("themeToggle");
+const restartBtn = document.getElementById("restartBtn");
 
-  useEffect(() => {
-    // Start or stop timer accordingly
-    if (started && !finished && !timerIdRef.current) {
-      const endTime = performance.now() + duration * 1000;
-      timerIdRef.current = setInterval(() => {
-        const remaining = Math.max(0, Math.round((endTime - performance.now()) / 1000));
-        setTimeLeft(remaining);
-        updateStats();
-        if (remaining <= 0) finishTest();
-      }, 200);
-    }
-    return () => {
-      clearInterval(timerIdRef.current);
-      timerIdRef.current = null;
-    };
-  }, [started, finished]);
+// New: User name input element
+const userNameInput = document.getElementById("userNameInput");
 
-  const fetchTextForDuration = async (d) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/texts?duration=${d}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("No text available for this duration");
-      const data = await res.json();
-      setCurrentTextId(data.id);
-      return data.content;
-    } catch (e) {
-      console.error(e);
-      return "No text available for this duration. Please add some texts in your backend.";
-    }
-  };
-
-  const renderPrompt = (text) => {
-    const spans = text.split("").map((char, i) => {
-      return { char, status: i === 0 ? "active" : "pending" };
+// Load/save user name from localStorage
+function loadUserName() {
+  if (userNameInput) {
+    userNameInput.value = localStorage.getItem("typeflow-user-name") || "";
+    userNameInput.addEventListener("input", () => {
+      localStorage.setItem("typeflow-user-name", userNameInput.value.trim());
     });
-    setChars(spans);
-    setCurrentIndex(0);
+  }
+}
+loadUserName();
+
+// Leaderboard logic
+
+const modalBg = document.getElementById("modalBg");
+const showLeaderboard = document.getElementById("showLeaderboard");
+const closeLeaderboard = document.getElementById("closeLeaderboard");
+const leaderboardTable = document.getElementById("leaderboardTable");
+const refreshLeaderboard = document.getElementById("refreshLeaderboard");
+let leaderboardDuration = 60;
+
+function fmtTime(iso){
+  try{ return new Date(iso).toLocaleString(); }catch{ return iso; }
+}
+
+function renderLeaderboardRows(items){
+  if(!items || items.length === 0)
+    return `<div style="text-align:center; color:var(--muted);padding:21px;">No results yet. Complete a test to appear here.</div>`;
+  return `<table style="width:100%;font-size:13.5px;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:4px 0;">#</th>
+        <th>User</th>
+        <th>WPM</th>
+        <th>Acc</th>
+        <th>Achiev.</th>
+        <th style="font-weight:400;">Time</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map((r, idx) => `
+        <tr>
+          <td style="text-align:center">${idx+1}</td>
+          <td>${r.user_id || "unknown"}</td>
+          <td style="font-weight:700">${r.wpm}</td>
+          <td>${r.accuracy}%</td>
+          <td><span class="ach ${r.achievement}" style="border-radius:13px;padding:2px 8px;border:1px solid var(--border);background:rgba(148,163,184,.10);">${r.achievement}</span></td>
+          <td style="color:var(--muted);">${fmtTime(r.created_at)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function loadLeaderboardData(){
+  leaderboardTable.innerHTML = "Loading…";
+  try{
+    const res = await fetch(`${API_BASE}/api/leaderboard?duration=${leaderboardDuration}&limit=15`, { cache:"no-store" });
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    leaderboardTable.innerHTML = renderLeaderboardRows(data);
+  }catch(e){
+    leaderboardTable.innerHTML = `<div style="color:var(--error); text-align:center;">Failed to load leaderboard.</div>`;
+  }
+}
+
+// Show/hide modal logic
+showLeaderboard.onclick = () => {
+  modalBg.style.display = "";
+  loadLeaderboardData();
+}
+closeLeaderboard.onclick = () => { modalBg.style.display = "none"; }
+refreshLeaderboard.onclick = loadLeaderboardData;
+
+modalBg.addEventListener("click", e => {
+  if(e.target === modalBg) modalBg.style.display = "none";
+});
+
+modalBg.querySelectorAll(".chip").forEach(btn => {
+  btn.onclick = function(){
+    modalBg.querySelectorAll(".chip").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    leaderboardDuration = parseInt(btn.dataset.d,10);
+    loadLeaderboardData();
   };
+});
 
-  const resetState = async () => {
-    if(timerIdRef.current){
-      clearInterval(timerIdRef.current);
-      timerIdRef.current = null;
-    }
-    setStarted(false);
-    setFinished(false);
-    setCorrectCount(0);
-    setKeystrokes(0);
-    setTimeLeft(duration);
-    setWpm(0);
-    setAccuracy(100);
-    setAchievement("-");
-    setAchievementClass("");
-    setCurrentIndex(0);
 
+// Theme
+const loadTheme = () => {
+  const saved = localStorage.getItem("typeflow-theme") || "dark";
+  document.documentElement.classList.toggle("light", saved === "light");
+  themeToggle.checked = saved !== "light";
+};
+const saveTheme = () => {
+  const isDark = themeToggle.checked;
+  localStorage.setItem("typeflow-theme", isDark ? "dark" : "light");
+  document.documentElement.classList.toggle("light", !isDark);
+};
+themeToggle.addEventListener("change", saveTheme);
+loadTheme();
+
+async function fetchTextForDuration(d) {
+  const res = await fetch(`${API_BASE}/api/texts?duration=${d}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("No text available for this duration");
+  const data = await res.json();
+  currentTextId = data.id;
+  return data.content;
+}
+
+async function submitResult() {
+  if (!currentTextId) return;
+  const userName = userNameInput?.value?.trim() || null;
+  const payload = {
+    user_id: userName,
+    duration,
+    wpm: calcWPM(),
+    accuracy: calcAccuracy(),
+    correct_chars: correctCount,
+    raw_keystrokes: keystrokes,
+    text_id: currentTextId
+  };
+  try {
+    await fetch(`${API_BASE}/api/results`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    console.error("Result submit failed", e);
+  }
+}
+
+function renderPrompt(text) {
+  promptEl.innerHTML = "";
+  chars = [];
+  for (let i = 0; i < text.length; i++) {
+    const span = document.createElement("span");
+    span.textContent = text[i];
+    span.className = "char pending";
+    chars.push(span);
+    promptEl.appendChild(span);
+  }
+  if (chars.length) chars[0].classList.add("active");
+}
+
+function startTimer() {
+  if (timerId) return;
+  const endTime = performance.now() + duration * 1000;
+  timerId = setInterval(() => {
+    timeLeft = Math.max(0, Math.round((endTime - performance.now()) / 1000));
+    timeEl.textContent = timeLeft;
+    updateStats();
+    if (timeLeft <= 0) finishTest();
+  }, 200);
+}
+function stopTimer() {
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = null;
+  }
+}
+
+function calcWPM() {
+  const elapsed = Math.max(1, duration - timeLeft);
+  return Math.max(0, Math.round((correctCount / 5) / (elapsed / 60)));
+}
+function calcAccuracy() {
+  return Math.round((correctCount / (keystrokes || 1)) * 100);
+}
+function updateAchievement(wpm) {
+  const tier = ACHIEVEMENTS.find(a => wpm >= a.minWPM && wpm <= a.maxWPM);
+  if (!tier) return;
+  achievementEl.textContent = tier.name;
+  achievementBadgeEl.textContent = tier.name;
+  achievementBadgeEl.className = "badge " + tier.class;
+  achievementBadgeEl.style.display = "inline-block";
+}
+function updateStats() {
+  const wpm = calcWPM();
+  const acc = calcAccuracy();
+  wpmEl.textContent = wpm.toString();
+  accEl.textContent = acc + "%";
+  updateAchievement(wpm);
+}
+
+async function resetState() {
+  stopTimer();
+  started = false;
+  finished = false;
+  currentIndex = 0;
+  correctCount = 0;
+  keystrokes = 0;
+  timeLeft = duration;
+  timeEl.textContent = timeLeft.toString();
+  wpmEl.textContent = "0";
+  accEl.textContent = "100%";
+  achievementEl.textContent = "-";
+  achievementBadgeEl.style.display = "none";
+  hiddenInput.value = "";
+
+  try {
     const text = await fetchTextForDuration(duration);
     renderPrompt(text);
-    if(hiddenInputRef.current) hiddenInputRef.current.value="";
-  };
-
-  const calcWPM = () => {
-    const elapsed = Math.max(1, duration - timeLeft);
-    return Math.max(0, Math.round((correctCount / 5) / (elapsed / 60)));
-  };
-
-  const calcAccuracy = () => {
-    return Math.round((correctCount / (keystrokes || 1)) * 100);
-  };
-
-  const updateAchievement = (wpmValue) => {
-    const tier = ACHIEVEMENTS.find(a => wpmValue >= a.minWPM && wpmValue <= a.maxWPM);
-    if (tier) {
-      setAchievement(tier.name);
-      setAchievementClass(tier.className);
-    }
-  };
-
-  const updateStats = () => {
-    const newWpm = calcWPM();
-    const newAcc = calcAccuracy();
-    setWpm(newWpm);
-    setAccuracy(newAcc);
-    updateAchievement(newWpm);
-  };
-
-  const submitResult = async () => {
-    if (!currentTextId) return;
-    const payload = {
-      user_id: userName.trim() || null,
-      duration,
-      wpm: calcWPM(),
-      accuracy: calcAccuracy(),
-      correct_chars: correctCount,
-      raw_keystrokes: keystrokes,
-      text_id: currentTextId
-    };
-    try {
-      await fetch(`${API_BASE}/api/results`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-    } catch (e) {
-      console.error("Result submit failed", e);
-    }
-  };
-
-  const finishTest = () => {
-    setFinished(true);
-    if(timerIdRef.current){
-      clearInterval(timerIdRef.current);
-      timerIdRef.current = null;
-    }
-    updateStats();
-    submitResult();
-  };
-
-  const handleInput = (e) => {
-    if(finished) return;
-
-    const val = e.data;
-    const key = e.inputType;
-
-    if(!started){
-      setStarted(true);
-    }
-
-    if(key === "insertText" && val?.length === 1){
-      if(currentIndex >= chars.length) return;
-      setKeystrokes(prev => prev + 1);
-      const expected = chars[currentIndex].char;
-      if(val === expected){
-        chars[currentIndex].status = "correct";
-        setCorrectCount(prev => prev + 1);
-      } else {
-        chars[currentIndex].status = "incorrect";
-      }
-      // Move to next char
-      chars[currentIndex].status = chars[currentIndex].status.replace("active", "").trim();
-      const nextIndex = currentIndex + 1;
-      if(nextIndex < chars.length) {
-        chars[nextIndex].status = "active";
-      }
-      setCurrentIndex(nextIndex);
-      setChars([...chars]);
-    } else if(key === "deleteContentBackward") {
-      if(currentIndex > 0){
-        const prevIndex = currentIndex - 1;
-        chars[prevIndex].status = "pending active";
-        setCurrentIndex(prevIndex);
-        setKeystrokes(prev => prev + 1);
-        setChars([...chars]);
-      }
-    }
-    if(hiddenInputRef.current) hiddenInputRef.current.value = "";
-    updateStats();
-    if(currentIndex >= chars.length){
-      finishTest();
-    }
-  };
-
-  const focusTyping = () => {
-    if(hiddenInputRef.current) hiddenInputRef.current.focus({ preventScroll: true });
-  };
-
-  return (
-    <div className="typing-test">
-      <div id="prompt" ref={promptRef} style={{fontFamily:"monospace", fontSize:"18px", whiteSpace:"pre-wrap"}}>
-        {chars.map((c,i) => (
-          <span key={i} className={`char ${c.status}`}>
-            {c.char}
-          </span>
-        ))}
-      </div>
-      <div className="stats">
-        <div>Time Left: <span id="time">{timeLeft}</span></div>
-        <div>WPM: <span id="wpm">{wpm}</span></div>
-        <div>Accuracy: <span id="accuracy">{accuracy}%</span></div>
-        <div>Achievement: <span id="achievementBadge" className={`badge ${achievementClass}`} style={{display: achievementClass ? "inline-block" : "none"}}>{achievement}</span></div>
-      </div>
-      <div 
-        id="textArea"
-        tabIndex={0}
-        style={{border:"1px solid #ccc", height:"150px", margin:"10px 0", padding:"8px", cursor:"text", outline:"none"}}
-        onClick={focusTyping}
-      >
-        Click here to start typing...
-      </div>
-      <input 
-        id="hiddenInput" 
-        type="text" 
-        autoComplete="off" 
-        spellCheck="false" 
-        style={{opacity:0, position:"absolute", left:"-9999px"}} 
-        ref={hiddenInputRef} 
-        onBeforeInput={handleInput}
-        onPaste={(e) => e.preventDefault()}
-      />
-      <input 
-        id="userNameInput" 
-        type="text" 
-        placeholder="Enter your name" 
-        value={userName} 
-        onChange={(e) => setUserName(e.target.value)} 
-        style={{margin:"10px 0", padding:"5px"}}
-      />
-      <div className="controls">
-        {[30, 60, 90].map(t => 
-          <button 
-            key={t} 
-            className={`time-chip ${duration === t ? "active" : ""}`} 
-            onClick={() => setDuration(t)}
-          >
-            {t} sec
-          </button>
-        )}
-        <button id="restartBtn" onClick={resetState}>Restart</button>
-      </div>
-    </div>
-  )
+  } catch (err) {
+    console.error(err);
+    renderPrompt("No text available for this duration. Please add some texts in your backend.");
+  }
 }
+
+async function finishTest() {
+  finished = true;
+  stopTimer();
+  hiddenInput.blur();
+  textAreaEl.blur();
+  updateStats();
+  await submitResult();
+}
+
+function handleInput(e) {
+  if (finished) return;
+
+  const val = e.data;
+  const key = e.inputType;
+
+  if (!started) {
+    started = true;
+    startTimer();
+  }
+
+  if (key === "insertText" && val?.length === 1) {
+    const expected = chars[currentIndex]?.textContent;
+    if (expected == null) return;
+
+    keystrokes++;
+    if (val === expected) {
+      chars[currentIndex].className = "char correct";
+      correctCount++;
+    } else {
+      chars[currentIndex].className = "char incorrect";
+    }
+    chars[currentIndex].classList.remove("active");
+    currentIndex++;
+    if (currentIndex < chars.length) {
+      chars[currentIndex].classList.add("active");
+    }
+  } else if (key === "deleteContentBackward") {
+    if (currentIndex > 0) {
+      currentIndex--;
+      chars[currentIndex].className = "char pending active";
+      keystrokes++;
+    }
+  }
+
+  hiddenInput.value = "";
+  updateStats();
+
+  if (currentIndex >= chars.length) {
+    finishTest();
+  }
+}
+
+function focusTyping() {
+  hiddenInput.focus({ preventScroll: true });
+}
+
+textAreaEl.addEventListener("click", focusTyping);
+textAreaEl.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    focusTyping();
+  }
+});
+hiddenInput.addEventListener("beforeinput", handleInput);
+
+timeChips.forEach((chip) => {
+  chip.addEventListener("click", async () => {
+    timeChips.forEach((c) => c.classList.remove("active"));
+    chip.classList.add("active");
+    duration = parseInt(chip.dataset.time, 10);
+    await resetState();
+  });
+});
+
+restartBtn.addEventListener("click", async () => {
+  await resetState();
+  focusTyping();
+});
+
+(async () => {
+  await resetState();
+  setTimeout(() => focusTyping(), 200);
+})();
+
+hiddenInput.addEventListener("paste", (e) => e.preventDefault());
+
+    
