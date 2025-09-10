@@ -330,5 +330,3 @@ restartBtn.addEventListener("click", async () => {
 })();
 
 hiddenInput.addEventListener("paste", (e) => e.preventDefault());
-
-    
